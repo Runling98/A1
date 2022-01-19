@@ -9,20 +9,13 @@ setwd("~/Dropbox/Duke/Econ 613/Assignment/A1/Data/")
 getwd()
 
 
-install.packages("tidyverse")
 library(tidyverse)
 
-install.packages("crosstable")
 librray("crosstable")
 
-install.packages("remotes")
 remotes :: install_github("jasonelaw/nrsa")
 library(remotes)
 
-install.packages("ineq")
-library(ineq)
-
-install.packages("fs")
 library(fs)
 
 install.packages("magrittr") # package installations are only needed the first time you use it
@@ -30,23 +23,11 @@ install.packages("dplyr")    # alternative installation of the %>%
 library(magrittr) # needs to be run every time you start R and want to use %>%
 library(dplyr, purrr)    # alternatively, this also loads %>%
 
-install.packages("purrr")
 library(purrr)
 
-install.packages("readr")
 library("readr")
 
-install.packages("arsenal")
 library("arsenal")
-
-install.packages("dplyr")
-library("dplyr")
-
-library("dplyr","tidyverse")
-library("crosstable", "remotes")
-library("ineq", "fs")
-library("magrittr" ,"readr")
-library("arsenal", "purrr")
 
 ##############################
 # Exercise 1: Basic Statistics
