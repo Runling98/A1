@@ -458,7 +458,7 @@ lines(share$year, share$share)
 # I define migration as household either moved or migrated 
 
 IDHH_old$migrate <- (IDHH_old$myear == IDHH_old$year | IDHH_old$move == 2)
-                                                                                          myear == year, recent_move))
+                                                                                   
 # Report the first 10 rows of your result and plot the share of individuals 
 # in that situation across years.
 
