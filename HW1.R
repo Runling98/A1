@@ -8,26 +8,18 @@
 setwd("~/Dropbox/Duke/Econ 613/Assignment/A1/Data/")
 getwd()
 
-
 library(tidyverse)
-
-librray("crosstable")
-
+library(crosstable)
+install.packages("remotes")
 remotes :: install_github("jasonelaw/nrsa")
 library(remotes)
-
+library(ineq)
 library(fs)
-
-install.packages("magrittr") # package installations are only needed the first time you use it
-install.packages("dplyr")    # alternative installation of the %>%
 library(magrittr) # needs to be run every time you start R and want to use %>%
-library(dplyr, purrr)    # alternatively, this also loads %>%
-
 library(purrr)
-
-library("readr")
-
-library("arsenal")
+library(readr)
+library(arsenal)
+library(dplyr)
 
 ##############################
 # Exercise 1: Basic Statistics
@@ -60,6 +52,7 @@ nrow(filter(ID16, age >= 25 & age <=35)) # 2765
 # 1.5 Cross-table gender/profession in 2009.
 source("http://pcwww.liv.ac.uk/~william/R/crosstab.r")
 crosstab(ID09, row.vars = "profession", col.vars = "gender")
+
 
 # 1.6 Distribution of wages in 2005 and 2019. Report the mean,
 # the standard deviation, the inter-decile ratio D9/D1 and the Gini coefficient.
@@ -140,11 +133,14 @@ dim(HD11)
 dim(IDHH11) # all matched 
 
 IDHH11_paris <- filter(IDHH11, location == "Paris")
-count(distinct(IDHH11_paris, idind)) 
+duplicated(IDHH11_paris$idind)
 
-# 1552
+# since it has duplicated idind, thus we just count the number of rows 
+nrow(IDHH11_paris)
 
-# 1552 individuals in Paris in 2011.
+# 3514
+
+# 3514 individuals in Paris in 2011.
 
 ##############################
 # Exercise 2: Merge Datasets
@@ -156,23 +152,23 @@ count(distinct(IDHH11_paris, idind))
 
 # 2.1 Read all individual datasets from 2004 to 2019. Append all these datasets.
 
-data_path <- "~/Dropbox/Duke/Econ 613/Assignment/A1/Data/ID/"
-files <- dir(data_path, pattern = "*.csv")
+data_path1 <- "~/Dropbox/Duke/Econ 613/Assignment/A1/Data/ID/"
+files <- dir(data_path1, pattern = "datind*")
 
 ID04_19 <- files %>%
-  map(~ read_csv(file.path(data_path, .))) %>% 
-  reduce(rbind)
-data_path
+  map(~ paste(data_path1, .x, sep = "")) %>%
+  map(read_csv, col_types = cols(.default = "c"), col_select = !c(1)) %>%
+  bind_rows
 
 # 2.2 Read all household datasets from 2004 to 2019. Append all these datasets.]
 
-data_path <- "~/Dropbox/Duke/Econ 613/Assignment/A1/Data/HD/"
-files <- dir(data_path, pattern = "*.csv")
+data_path2 <- "~/Dropbox/Duke/Econ 613/Assignment/A1/Data/HD/"
+files <- dir(data_path2, pattern = "dathh*")
 
 HD04_19 <- files %>%
-  map(~ read_csv(file.path(data_path, .))) %>% 
-  reduce(rbind)
-data_path
+  map(~ paste(data_path2, .x, sep = "")) %>%
+  map(read_csv, col_types = cols(.default = "c"), col_select = !c(1)) %>%
+  bind_rows
 
 # 2.3 List the variables that are simultaneously present in the individual and 
 # household datasets.
@@ -188,67 +184,96 @@ IDHH <- merge(ID04_19, HD04_19, by = c("idmen", "year"))
 # write.csv(IDHH,"~/Dropbox/Duke/Econ 613/Assignment/A1/Data/IDHH.csv", 
 #           row.names = FALSE)
 
+# check possibilities of duplicates 
+
+nrow(IDHH)- count(distinct(IDHH, idind, year)) #32 
+
+# 32 duplicates in 2013, drop these duplicates 
+
+IDHH_new <- distinct(IDHH, idind, year, .keep_all = T)
+
+sapply(IDHH_new, class) 
+
+# data tidying work 
+# transfer from strings to integers 
+
+cols.num <- c("idmen","year", "idind", "datent", "wage", "myear")
+IDHH_new[cols.num] <- sapply(IDHH_new[cols.num],as.numeric)
+
+sapply(IDHH_new, class) 
+
 ##############
 # Part Two 
 ##############
 
 # 2.5 Number of households in which there are more than four family members
 
-fam_count <- IDHH %>%
-  group_by(idmen) %>%
-  summarise(member_num = n_distinct(idind)) 
+fam_count_4 <- IDHH_new %>%
+  group_by(year, idmen) %>%
+  summarise(member_num = n()) %>% 
+  filter(member_num > 4) %>% 
+  summarise(count = n())
 
-max(fam_count$member_num) #4
-
-# since the maximum number of individuals is four, we have zero number of hou
-# households in which there are more than four family members. 
+fam_count_4
 
 # 2.6 Number of households in which at least one member is unemployed
 # we compute the distinct number of households as long as one member has been 
 # unemployed during 2004-2019. 
-table(IDHH$empstat)
+table(IDHH_new$empstat)
 
-unemployed <- filter(IDHH, empstat == "Unemployed");
-count(distinct(unemployed, idmen)) 
+unemployed_year <- IDHH_new %>%
+  group_by(year, idmen) %>% 
+  summarise(unemployed = any(empstat == "Unemployed")) %>% 
+  filter(unemployed) %>% 
+  summarise(total_unemployed = n())
+
+unemployed_year
 
 # 8161 households in which at least one member is unemployed. 
 
 # 2.7 Number of households in which at least two members are of the 
 # same profession
 
-professionals <- filter(IDHH, !is.na(profession) & profession != 0);
-coworkers <- professionals %>% group_by(idmen) %>% filter(duplicated(profession));
-count(distinct(ungroup(coworkers), idmen))
+professionals <- IDHH_new %>%
+  group_by(year, idmen) %>% 
+  summarise(coworkers = any(duplicated(profession))) %>% 
+  filter(coworkers) %>% 
+  summarise(total_coworkers = n())
 
-# 21375 
+professionals
 
 # 2.8 Number of individuals in the panel that are from household-Couple with kids
-Couple_wkids <- filter(IDHH, mstatus == "Couple, with Kids"); 
-count(distinct(Couple_wkids, idind))
 
-# 15646 individuals in the panel that are from household-Couple with kids. 
+Couple_wkids <- IDHH_new %>%
+  group_by(year) %>% 
+  filter(mstatus == "Couple, with Kids") %>% 
+  summarise(count = n()) 
+
+Couple_wkids
 
 # 2.9 Number of individuals in the panel that are from Paris.
-table(IDHH$location)
 
-Paris <- filter(IDHH, location == "Paris"); 
-count(distinct(Paris, idind)) #6186
+Paris <- IDHH_new %>%
+  group_by(year) %>% 
+  filter(location == "Paris") %>% 
+  summarise(count = n()) 
 
-# 6186 individuals in the panel that are from Paris.  
+Paris  
 
 # 2.10 Find the household with the most number of family members. 
 # Report its idmen.
-most_mem <- subset(fam_count, member_num == 4)
-table(most_mem$idmen)
 
-# These households are 1500597023470100, 1512466015750100, 1607610011670100, 
-# 1707764063150100, 2007953001000101, 2100493042350100, 
-# 2303559016060102 2402178057590101 
+most_mem <- IDHH_new %>%
+  group_by(year, idmen) %>%
+  summarise(HH_num = n()) %>%
+  filter(min_rank(desc(HH_num)) == 1)
+
+xtable(most_mem)
 
 # 2.11 Number of households present in 2010 and 2011.
 # we consider the number of distinct household in 2010 and 2011. 
 
-HH1011 <- filter(IDHH, year == "2010" | year == "2011"); 
+HH1011 <- filter(IDHH_new, year == "2010" | year == "2011"); 
 count(distinct(HH1011, idmen)) #13424
 
 # There are 13424 number of households present in 2010 and 2011. 
@@ -258,16 +283,44 @@ count(distinct(HH1011, idmen)) #13424
 ##############################
 
 # 3.1 Find out the year each household enters and exit the panel. 
-enter_exit <- IDHH %>%
+enter_exit <- IDHH_new %>%
   group_by(idmen) %>%
   summarise(exit = max(year),
             enter = min(year)) 
 
 # Report the distribution of the time spent in the survey for each household.
-enter_exit$duration <- enter_exit$exit - enter_exit$enter
+enter_exit$duration <- enter_exit$exit - enter_exit$enter + 1 
 
-hist(enter_exit$duration)
+ggplot(enter_exit) + 
+  geom_bar(mapping = aes( x = duration))
+
 summary(enter_exit$duration)
+
+# 3.2 based on datent, identify whether or not a household moved into its 
+# current dwelling at the year of survey. 
+table(IDHH_new$move)
+
+IDHH_new$moved <- ifelse(IDHH_new$datent == IDHH_new$year, 1, 0)
+
+newmover <- IDHH_new %>%
+  group_by(idmen, year) %>%
+  summarise(moved = 1 ) %>%
+  head(10) 
+
+# Report the first 10 rows 
+xtable(newmover)
+
+# plot the share of individuals in that situation across years.
+IDHH_new$number <- 1
+table(IDHH_new$moved)
+
+share_df <- IDHH_new %>%
+  group_by(year) %>%
+  summarise(total = sum(number),
+           movers = sum(moved, na.rm = T),
+           share = movers/total)
+
+ggplot(data = share_df, mapping = aes(x = year, y = share)) + geom_line()
 
 # 3.2 based on datent, identify whether or not a household moved into its 
 # current dwelling at the year of survey. 
