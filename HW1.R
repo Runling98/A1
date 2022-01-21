@@ -1,7 +1,6 @@
 ########################### 
 # HW1: Data(1) 
 # Runling Wu 
-# Econ 613 
 # Date: Jan.12/2022
 ###########################
 
@@ -20,6 +19,7 @@ library(purrr)
 library(readr)
 library(arsenal)
 library(dplyr)
+library(xtable)
 
 ##############################
 # Exercise 1: Basic Statistics
@@ -62,7 +62,8 @@ summary(ID05$wage)
 
 wage_earner <- ID05 %>% filter(wage != 0 & !is.na(wage) )
 
-summary(wage_earner$wage) # mean 19603
+mean(wage_earner$wage)# mean 22443
+
 sd(wage_earner$wage, na.rm = T) # sd 18076.71
 
 quantile(wage_earner$wage, na.rm = TRUE, c(0.1, 0.9))
@@ -142,6 +143,8 @@ nrow(IDHH11_paris)
 
 # 3514 individuals in Paris in 2011.
 
+
+
 ##############################
 # Exercise 2: Merge Datasets
 ##############################
@@ -192,6 +195,8 @@ nrow(IDHH)- count(distinct(IDHH, idind, year)) #32
 
 IDHH_new <- distinct(IDHH, idind, year, .keep_all = T)
 
+IDHH_old <- distinct(IDHH, idind, year, .keep_all = T)
+
 sapply(IDHH_new, class) 
 
 # data tidying work 
@@ -202,63 +207,175 @@ IDHH_new[cols.num] <- sapply(IDHH_new[cols.num],as.numeric)
 
 sapply(IDHH_new, class) 
 
-##############
-# Part Two 
-##############
+################################################
+# Part Two Version One 
+# Version 1: we consider the dataset as a whole 
+# We consider the distinct households or individuals 
+################################################
+
+
+# 2.5 Number of households in which there are more than four family members
+# we see this question as households across all the survey years has more than
+# four family members 
+
+fam_count_v1 <- IDHH_new %>%
+  group_by(idmen) %>%
+  summarise(member_num = n()) %>% 
+  filter(member_num > 4) %>% 
+  summarise(count = n())
+
+fam_count_v1 # 27195 
+
+# 2.6 Number of households in which at least one member is unemployed
+# we compute the number of households as long as one member has ever been 
+# unemployed during 2004-2019. 
+
+unemployed_year_v1 <- IDHH_new %>%
+  group_by(idmen) %>% 
+  summarise(unemployed = any(empstat == "Unemployed")) %>% 
+  filter(unemployed) %>% 
+  summarise(total_unemployed = n())
+
+unemployed_year_v1 #8161 
+
+
+# 2.7 Number of households in which at least two members are of the 
+# same profession
+# we compute the number of households as long as at least two members of the 
+# same profession during 2004-2019. 
+
+professionals_v1 <- IDHH_new %>%
+  group_by(idmen) %>% 
+  summarise(coworkers = any(duplicated(profession))) %>% 
+  filter(coworkers) %>% 
+  summarise(total_coworkers = n())
+
+professionals_v1 # 36232
+
+
+# 2.8 Number of individuals in the panel that are from household-Couple with kids
+#  Union 
+
+Couple_wkids_v1u <- IDHH_new %>%
+  filter(mstatus == "Couple, with Kids") %>% 
+  summarise(count = n()) 
+
+Couple_wkids_v1u # 209371 
+
+# intersection 
+
+Couple_wkids_v1i <- IDHH_new %>%
+  filter(mstatus == "Couple, with Kids") 
+
+  count(distinct(Couple_wkids_v1i, idind))
+
+Couple_wkids_v1u # 55094 
+
+
+# 2.9 Number of individuals in the panel that are from Paris.
+# Union
+
+Paris_v1u <- IDHH_new %>%
+  filter(location == "Paris") %>% 
+  summarise(count = n()) 
+
+Paris_v1u #51904 
+
+# intersection 
+
+Paris_v1i <- IDHH_new %>%
+  filter(location == "Paris") 
+
+count(distinct(Paris_v1i, idind)) #14563
+
+
+# 2.10 Find the household with the most number of family members. 
+# Report its idmen.
+
+most_mem_v1 <- IDHH_new %>%
+  group_by(year, idmen) %>%
+  summarise(HH_num = n()) %>%
+  filter(min_rank(desc(HH_num)) == 1)
+
+xtable(most_mem_v1)
+
+# idmen 2207811124040100 &  14 \\ 
+# idmen 2010 & 2510263102990100 &  14 \\
+
+# 2.11 Number of households present in 2010 and 2011.
+# There are two possibilities 
+# (1) union: we consider the number of household in 2010 and 2011. 
+
+HH1011 <- filter(IDHH_new, year == "2010" | year == "2011"); 
+count(distinct(HH1011, idmen)) #13424
+
+# (2) intersection: we consider the number of household in both 2010 and 2011. 
+
+HH1011 %>% 
+  group_by(idmen, year) %>% 
+  filter(year == 2010 | year == 2011) %>%
+  summarise() %>% summarise(HH1011_num = n()) %>% 
+  filter(HH1011_num == 2) %>% summarise(count = n())
+
+# 8984
+
+
+###########################################
+# Part Two Version Two 
+# Version 2: we consider for each year 
+###########################################
 
 # 2.5 Number of households in which there are more than four family members
 
-fam_count_4 <- IDHH_new %>%
+fam_count_v2 <- IDHH_new %>%
   group_by(year, idmen) %>%
   summarise(member_num = n()) %>% 
   filter(member_num > 4) %>% 
   summarise(count = n())
 
-fam_count_4
+fam_count_v2
 
 # 2.6 Number of households in which at least one member is unemployed
 # we compute the distinct number of households as long as one member has been 
 # unemployed during 2004-2019. 
 table(IDHH_new$empstat)
 
-unemployed_year <- IDHH_new %>%
+unemployed_year_v2 <- IDHH_new %>%
   group_by(year, idmen) %>% 
   summarise(unemployed = any(empstat == "Unemployed")) %>% 
   filter(unemployed) %>% 
   summarise(total_unemployed = n())
 
-unemployed_year
-
-# 8161 households in which at least one member is unemployed. 
+unemployed_year_v2
 
 # 2.7 Number of households in which at least two members are of the 
 # same profession
 
-professionals <- IDHH_new %>%
+professionals_v2 <- IDHH_new %>%
   group_by(year, idmen) %>% 
   summarise(coworkers = any(duplicated(profession))) %>% 
   filter(coworkers) %>% 
   summarise(total_coworkers = n())
 
-professionals
+professionals_v2
 
 # 2.8 Number of individuals in the panel that are from household-Couple with kids
 
-Couple_wkids <- IDHH_new %>%
+Couple_wkids_v2 <- IDHH_new %>%
   group_by(year) %>% 
   filter(mstatus == "Couple, with Kids") %>% 
   summarise(count = n()) 
 
-Couple_wkids
+Couple_wkids_v2
 
 # 2.9 Number of individuals in the panel that are from Paris.
 
-Paris <- IDHH_new %>%
+Paris_v2 <- IDHH_new %>%
   group_by(year) %>% 
   filter(location == "Paris") %>% 
   summarise(count = n()) 
 
-Paris  
+Paris_v2  
 
 # 2.10 Find the household with the most number of family members. 
 # Report its idmen.
@@ -271,12 +388,21 @@ most_mem <- IDHH_new %>%
 xtable(most_mem)
 
 # 2.11 Number of households present in 2010 and 2011.
-# we consider the number of distinct household in 2010 and 2011. 
+# There are two possibilities 
+# (1) union: we consider the number of household in 2010 and 2011. 
 
 HH1011 <- filter(IDHH_new, year == "2010" | year == "2011"); 
 count(distinct(HH1011, idmen)) #13424
 
-# There are 13424 number of households present in 2010 and 2011. 
+# (2) intersection: we consider the number of household in both 2010 and 2011. 
+
+HH1011 %>% 
+  group_by(idmen, year) %>% 
+  filter(year == 2010 | year == 2011) %>%
+  summarise() %>% summarise(HH1011_num = n()) %>% 
+  filter(HH1011_num == 2) %>% summarise(count = n())
+
+# 8984
 
 ##############################
 # Exercise 3: Migration
@@ -296,6 +422,7 @@ ggplot(enter_exit) +
 
 summary(enter_exit$duration)
 
+
 # 3.2 based on datent, identify whether or not a household moved into its 
 # current dwelling at the year of survey. 
 table(IDHH_new$move)
@@ -304,66 +431,53 @@ IDHH_new$moved <- ifelse(IDHH_new$datent == IDHH_new$year, 1, 0)
 
 newmover <- IDHH_new %>%
   group_by(idmen, year) %>%
-  summarise(moved = 1 ) %>%
   head(10) 
 
-# Report the first 10 rows 
-xtable(newmover)
+xtable(select(newmover, idmen, year, moved))
 
 # plot the share of individuals in that situation across years.
-IDHH_new$number <- 1
-table(IDHH_new$moved)
+table(IDHH_old$move)
 
-share_df <- IDHH_new %>%
+IDHH_old$moved <- ifelse(IDHH_old$datent == IDHH_old$year, 1, 0)
+newmover <- filter(IDHH_old, moved == 1)
+
+IDHH_old$number <- 1
+table(IDHH_old$moved)
+
+share <- IDHH_old %>%
   group_by(year) %>%
   summarise(total = sum(number),
-           movers = sum(moved, na.rm = T),
-           share = movers/total)
-
-ggplot(data = share_df, mapping = aes(x = year, y = share)) + geom_line()
-
-# 3.2 based on datent, identify whether or not a household moved into its 
-# current dwelling at the year of survey. 
-table(IDHH$move)
-
-IDHH$moved <- ifelse(IDHH$datent == IDHH$year, 1, 0)
-newmover <- filter(IDHH, moved == 1)
-
-# Report the first 10 rows 
-head(newmover, 10)
-
-# plot the share of individuals in that situation across years.
-IDHH$number <- 1
-table(IDHH$moved)
-
-share <- IDHH %>%
-  group_by(year) %>%
-  summarise(total = sum(number),
-           movers = sum(moved, na.rm = T),
-           share = movers/total)
+            movers = sum(moved, na.rm = T),
+            share = movers/total)
 
 plot(share$year, share$share)
 lines(share$year, share$share)
 
+
 # 3.3 identify whether or not household migrated at the year of survey
+# I define migration as household either moved or migrated 
 
-IDHH$migrate <- (IDHH$myear == IDHH$year | IDHH$move == 2)
-
-
+IDHH_old$migrate <- (IDHH_old$myear == IDHH_old$year | IDHH_old$move == 2)
+                                                                                          myear == year, recent_move))
 # Report the first 10 rows of your result and plot the share of individuals 
 # in that situation across years.
 
-head(IDHH, 10)
+migration <- IDHH_old %>%
+  head(10) 
 
-mig <- IDHH %>% filter(migrate == TRUE)
+# Report the first 10 rows 
+xtable(select(migration, idmen, year, migrate)) 
 
-IDHH$migratedum <- ifelse(IDHH$migrate == TRUE, 1, 0)
+mig <- IDHH_old %>% filter(migrate == TRUE)
 
-share_m <- IDHH %>%
+IDHH_old$migratedum <- ifelse(IDHH_old$migrate == TRUE, 1, 0)
+
+share_m <- IDHH_old %>%
   group_by(year) %>%
   summarise(total = sum(number),
             migrant = sum(migratedum, na.rm = T),
             share_m = migrant/total)
+
 
 plot(share_m$year, share_m$share_m)
 lines(share_m$year, share_m$share_m)
@@ -378,21 +492,25 @@ lines(share_m$year, share_m$share_m, pch = 18, col = "blue", lty = 2)
 legend("bottomleft", legend = c("share of movers", "share of migrants"), 
        col = c("red", "blue"), lty = 1:2, cex = 0.8)
 
+
 # 3.5 For household migrate, 
 # how many households had at least one family member changed his/her 
 # profession or employment status. 
 
 # use a subset 
 
-keeps <- c("idind", "idmen", "profession", "empstat", "year")
-IDHH_up = IDHH[keeps]
+keeps <- c("idind", "idmen", "profession", "empstat", "year", "migrate")
+IDHH_up = IDHH_old[keeps]
+
+IDHH_mig <- IDHH_up %>% 
+  filter(migrate == 1)
 
 # we dont want to consider missing value in either profession or empstat. 
 # Thus we drop any rows with missing in ourdata. 
 # The reason for that is we do not consider missing value as the same profession/
 # empstat. 
 
-IDHH_complete <- na.omit(IDHH_up)
+IDHH_complete <- na.omit(IDHH_mig)
 
 migrate_diff <- IDHH_complete %>%
   group_by(idmen, idind) %>%
@@ -403,18 +521,26 @@ mig_diff_op <- filter(migrate_diff, diff_occ > 1 | diff_emp >1)
 mig_diff_op$distinc <- n_distinct(mig_diff_op$idmen)
 table(mig_diff_op$distinc)
 
-
-# 15645 
-
 ##########################
 # Exercise 4: Attrition
 #########################
+# two ways of approaching this question: 
+# Version I: create a list for all the idind, counting for reentry
 
-colnames(IDHH)
+year_att <- IDHH_new %>%
+  group_by(idind) %>%
+  mutate(year_list = list(unique(year))) %>%
+  ungroup %>%
+  mutate(att = !map2_lgl(year+1, year_list, is.element)) %>%
+  filter(year < max(year)) %>%
+  group_by(year) %>% 
+  summarise(att_rate = mean(att) * 100)
 
-table(IDHH$...1.x)
+xtable(year_att)
+  
+# Version II: year of entry and years of exit
 
-year_range <- IDHH %>% 
+year_range <- IDHH_new %>% 
   group_by(idind) %>% 
   summarise(begin = min(year), end = max(year));
 
@@ -433,6 +559,5 @@ for (row in 2: nrow(year_count_c) )
   + year_count[row, "begin"]
 };
 mutate(year_count_c, attrition_rate = end/begin)
-
 
 ########### end ###############
